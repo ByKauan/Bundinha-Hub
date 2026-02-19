@@ -1,0 +1,434 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local player = Players.LocalPlayer
+
+-- ScreenGui (TPS)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Tps"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 10
+
+-- CHÃO INVISÍVEL
+local safeFloor = Instance.new("Part")
+safeFloor.Name = "SafeZoneFloor"
+safeFloor.Size = Vector3.new(60, 1, 60)
+safeFloor.Position = Vector3.new(-104, 80, 104)
+safeFloor.Anchored = true
+safeFloor.CanCollide = true
+safeFloor.Transparency = 1
+safeFloor.BrickColor = BrickColor.new("Bright green")
+safeFloor.Material = Enum.Material.ForceField
+safeFloor.Parent = workspace
+
+-- HIGHLIGHTS INIMIGOS (CORRIGIDO)
+local enemyNames = {"Foxy", "Puppet", "Freddy", "Bonnie", "Cupcake", "Chica"}
+local highlightedEnemies = {}
+
+local function getPrimaryPart(model)
+    if model.PrimaryPart then return model.PrimaryPart end
+    local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso")
+    if hrp then model.PrimaryPart = hrp return hrp end
+    for _, part in pairs(model:GetChildren()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            model.PrimaryPart = part
+            return part
+        end
+    end
+    return model:FindFirstChildWhichIsA("BasePart")
+end
+
+local function addHighlight(obj)
+    if highlightedEnemies[obj] then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "EnemyHighlight_" .. obj.Name
+    highlight.Adornee = obj
+    highlight.FillColor = Color3.fromRGB(255, 30, 30)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+    highlight.FillTransparency = 0.2
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = workspace.CurrentCamera
+    highlightedEnemies[obj] = highlight
+    print("👹 " .. obj.Name .. " destacada!")
+end
+
+local function setupEnemyHighlights()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        for _, name in pairs(enemyNames) do
+            if string.find(string.lower(obj.Name), string.lower(name)) then
+                if obj:IsA("Model") then
+                    addHighlight(obj)
+                elseif obj:IsA("Part") and obj.Parent:IsA("Model") then
+                    local parentModel = obj.Parent
+                    if not highlightedEnemies[parentModel] then
+                        addHighlight(parentModel)
+                    end
+                end
+                break
+            end
+        end
+    end
+    print("✅ Highlights configurados!")
+end
+
+setupEnemyHighlights()
+
+workspace.DescendantAdded:Connect(function(descendant)
+    wait()
+    for _, name in pairs(enemyNames) do
+        if string.find(string.lower(descendant.Name), string.lower(name)) then
+            if descendant:IsA("Model") then
+                addHighlight(descendant)
+            elseif descendant:IsA("Part") and descendant.Parent and descendant.Parent:IsA("Model") then
+                local parentModel = descendant.Parent
+                if string.find(string.lower(parentModel.Name), string.lower(name)) and not highlightedEnemies[parentModel] then
+                    addHighlight(parentModel)
+                end
+            end
+            break
+        end
+    end
+end)
+
+-- TP FUSÍVEIS (CORRIGIDO)
+local function teleportToNearestFuse()
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then 
+        print("❌ Personagem não carregado!")
+        return 
+    end
+    
+    local playerPos = player.Character.HumanoidRootPart.Position
+    local nearestFuse = nil
+    local shortestDistance = math.huge
+    
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and string.find(string.lower(obj.Name), "fuse") then
+            local success, result = pcall(function() return obj.Position end)
+            if success then
+                local distance = (playerPos - result).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestFuse = obj
+                end
+            end
+        elseif obj:IsA("Model") and string.find(string.lower(obj.Name), "fuse") then
+            local primary = getPrimaryPart(obj)
+            if primary then
+                local distance = (playerPos - primary.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestFuse = obj
+                end
+            end
+        elseif obj:IsA("Tool") and string.find(string.lower(obj.Name), "fuse") then
+            local handle = obj:FindFirstChild("Handle") or obj:FindFirstChildWhichIsA("BasePart")
+            if handle then
+                local distance = (playerPos - handle.Position).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    nearestFuse = obj
+                end
+            end
+        end
+    end
+    
+    if nearestFuse then
+        local targetPos
+        if nearestFuse:IsA("BasePart") then
+            targetPos = nearestFuse.Position + Vector3.new(0, 5, 0)
+        elseif nearestFuse:IsA("Model") then
+            local primary = getPrimaryPart(nearestFuse)
+            targetPos = primary.Position + Vector3.new(0, 5, 0)
+        else
+            local handle = nearestFuse:FindFirstChild("Handle") or nearestFuse:FindFirstChildWhichIsA("BasePart")
+            targetPos = handle.Position + Vector3.new(0, 5, 0)
+        end
+        
+        player.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos)
+        print("🚀 TP Fusível: " .. nearestFuse.Name)
+    else
+        print("❌ Nenhum fusível encontrado!")
+    end
+end
+
+local function teleportToPuppet()
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = CFrame.new(-115, 4, -10)
+        print("TP Puppet")
+    end
+end
+
+-- 🆕 FULLBRIGHT FUNCTION
+local fullbrightEnabled = false
+local originalLighting = {}
+
+local function toggleFullbright()
+    fullbrightEnabled = not fullbrightEnabled
+    
+    if fullbrightEnabled then
+        -- Salva configurações originais
+        originalLighting.Brightness = Lighting.Brightness
+        originalLighting.Ambient = Lighting.Ambient
+        originalLighting.OutdoorAmbient = Lighting.OutdoorAmbient
+        originalLighting.FogEnd = Lighting.FogEnd
+        originalLighting.FogStart = Lighting.FogStart
+        
+        -- Aplica fullbright
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 100000
+        Lighting.GlobalShadows = false
+        print("🌞 Fullbright ATIVADO!")
+    else
+        -- Restaura configurações originais
+        Lighting.Brightness = originalLighting.Brightness or 1
+        Lighting.Ambient = originalLighting.Ambient or Color3.fromRGB(128, 128, 128)
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient or Color3.fromRGB(128, 128, 128)
+        Lighting.FogEnd = originalLighting.FogEnd or 100
+        Lighting.FogStart = originalLighting.FogStart or 0
+        Lighting.GlobalShadows = true
+        print("🌙 Fullbright DESATIVADO!")
+    end
+end
+
+local positions = {
+    Salao = Vector3.new(-209, 8, 153),
+    Fusiveis = Vector3.new(-78, 4, 148),
+    Safe = Vector3.new(-104, 85, 104)
+}
+
+local function teleport(posName, pos)
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+        print("✨ TP: " .. posName)
+    end
+end
+
+-- TECLAS (REMOVIDA tecla B)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Z then
+        teleport("Salão", positions.Salao)
+    elseif input.KeyCode == Enum.KeyCode.X then
+        teleport("Sala dos fusíveis", positions.Fusiveis)
+    elseif input.KeyCode == Enum.KeyCode.Q then
+        teleport("Safe", positions.Safe)
+    elseif input.KeyCode == Enum.KeyCode.F then
+        teleportToNearestFuse()
+    end
+end)
+
+-- ✅ GUI COMPLETA (CORRIGIDA)
+local toggleBtn = Instance.new("ImageButton")
+toggleBtn.Name = "ToggleBtn"
+toggleBtn.Size = UDim2.new(0, 100, 0, 100)
+toggleBtn.Position = UDim2.new(0, 20, 0.5, -50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+toggleBtn.Image = "rbxassetid://113040653096663"
+toggleBtn.ImageColor3 = Color3.new(1,1,1)
+toggleBtn.ImageTransparency = 0
+toggleBtn.ScaleType = Enum.ScaleType.Fit
+toggleBtn.ZIndex = 1
+toggleBtn.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 50)
+toggleCorner.Parent = toggleBtn
+
+-- GUI PRINCIPAL
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 400, 0, 350)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -175)
+mainFrame.BackgroundColor3 = Color3.new(0.15, 0.15, 0.2)
+mainFrame.BackgroundTransparency = 0.1
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.ZIndex = 0
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 18)
+mainCorner.Parent = mainFrame
+
+-- Fundo com imagem
+local backgroundImage = Instance.new("ImageLabel")
+backgroundImage.Name = "BackgroundImage"
+backgroundImage.Size = UDim2.new(1, 0, 1, 0)
+backgroundImage.Position = UDim2.new(0, 0, 0, 0)
+backgroundImage.BackgroundTransparency = 1
+backgroundImage.Image = "rbxassetid://122925016605181"
+backgroundImage.ImageTransparency = 0.15
+backgroundImage.ScaleType = Enum.ScaleType.Tile
+backgroundImage.ZIndex = 1
+backgroundImage.Parent = mainFrame
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 25, 35)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(45, 45, 60))
+}
+gradient.Rotation = 45
+gradient.Parent = mainFrame
+
+-- Header
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 65)
+header.BackgroundTransparency = 1
+header.Parent = mainFrame
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.Position = UDim2.new(1, -50, 0, 12)
+closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.ZIndex = 600
+closeBtn.Parent = header
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 20)
+closeCorner.Parent = closeBtn
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -60, 1, 0)
+title.Position = UDim2.new(0, 20, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Bundinha Hub"
+title.TextColor3 = Color3.new(1,1,1)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 600
+title.Parent = header
+
+-- ScrollFrame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Name = "ScrollFrame"
+scrollFrame.Size = UDim2.new(1, -20, 1, -80)
+scrollFrame.Position = UDim2.new(0, 10, 0, 70)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(60, 20, 80)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 1
+scrollFrame.ScrollBarThickness = 1
+scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(150, 50, 200)
+scrollFrame.ZIndex = 600
+scrollFrame.Parent = mainFrame
+
+local scrollCorner = Instance.new("UICorner")
+scrollCorner.CornerRadius = UDim.new(0, 12)
+scrollCorner.Parent = scrollFrame
+
+local scrollListLayout = Instance.new("UIListLayout")
+scrollListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+scrollListLayout.Padding = UDim.new(0, 6)
+scrollListLayout.Parent = scrollFrame
+
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- 🆕 BOTÃO FULLBRIGHT (VERMELHO/VERDE)
+local fullbrightBtn = Instance.new("TextButton")
+fullbrightBtn.Size = UDim2.new(1, -20, 0, 60)
+fullbrightBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- ✅ VERMELHO (desativado)
+fullbrightBtn.Text = "Full Bright OFF"
+fullbrightBtn.TextColor3 = Color3.new(1, 1, 1)
+fullbrightBtn.TextScaled = true
+fullbrightBtn.Font = Enum.Font.GothamBold
+fullbrightBtn.LayoutOrder = 1
+fullbrightBtn.Parent = scrollFrame
+
+local fullbrightCorner = Instance.new("UICorner")
+fullbrightCorner.CornerRadius = UDim.new(0, 12)
+fullbrightCorner.Parent = fullbrightBtn
+
+fullbrightBtn.MouseButton1Click:Connect(function()
+    toggleFullbright()
+    if fullbrightEnabled then
+        fullbrightBtn.BackgroundColor3 = Color3.fromRGB(50, 255, 50) -- ✅ VERDE (ativado)
+        fullbrightBtn.Text = "Full Bright ON"
+    else
+        fullbrightBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50) -- ✅ VERMELHO (desativado)
+        fullbrightBtn.Text = "Full Bright OFF"
+    end
+end)
+
+-- BOTÕES TP
+local btnPositions = {
+    {name = "Sala De Segurança", pos = positions.Salao},
+    {name = "Sala Dos Fusíveis", pos = positions.Fusiveis},
+    {name = "Safe-Zone", pos = positions.Safe},
+    {name = "Tp To Fusível", pos = nil, tpFuse = true},
+    {name = "Tp To Puppet", pos = Vector3.new(-115, 4, -10), puppet = true}
+}
+
+for i, data in ipairs(btnPositions) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 60)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 20, 20)
+    btn.BackgroundTransparency = 1
+    btn.Text = data.name
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    btn.LayoutOrder = i + 1
+    btn.ZIndex = 1
+    btn.Parent = scrollFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 12)
+    btnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        if data.tpFuse then
+            teleportToNearestFuse()
+        elseif data.puppet then
+            teleportToPuppet()
+        else
+            teleport(data.name, data.pos)
+        end
+    end)
+end
+
+-- EVENTOS GUI
+toggleBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+    toggleBtn.BackgroundColor3 = mainFrame.Visible and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 50, 50)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+end)
+
+-- ARRASTO
+local dragging, dragStart, startPos = false
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+header.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+header.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
