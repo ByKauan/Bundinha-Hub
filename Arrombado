@@ -26,6 +26,9 @@ safeFloor.Parent = workspace
 local enemyNames = {"Foxy", "Puppet", "Freddy", "Bonnie", "Cupcake", "Chica"}
 local highlightedEnemies = {}
 
+-- HIGHLIGHTS FUSÍVEIS (NOVO)
+local fuseHighlights = {}
+
 local function getPrimaryPart(model)
     if model.PrimaryPart then return model.PrimaryPart end
     local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso")
@@ -52,6 +55,32 @@ local function addHighlight(obj)
     highlight.Parent = workspace.CurrentCamera
     highlightedEnemies[obj] = highlight
     print("👹 " .. obj.Name .. " destacada!")
+end
+
+-- NOVA FUNÇÃO PARA HIGHLIGHTS FUSÍVEIS
+local function addFuseHighlight(obj)
+    if fuseHighlights[obj] then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "FuseHighlight_" .. obj.Name
+    highlight.Adornee = obj
+    highlight.FillColor = Color3.fromRGB(30, 255, 30)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+    highlight.FillTransparency = 0.3
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = workspace.CurrentCamera
+    fuseHighlights[obj] = highlight
+    print("🔌 " .. obj.Name .. " fusível destacada!")
+end
+
+local function clearFuseHighlights()
+    for obj, highlight in pairs(fuseHighlights) do
+        if highlight and highlight.Parent then
+            highlight:Destroy()
+        end
+        fuseHighlights[obj] = nil
+    end
+    print("🧹 Highlights de fusíveis limpos!")
 end
 
 local function setupEnemyHighlights()
@@ -362,6 +391,47 @@ fullbrightBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- 🆕 BOTÃO ESP FUSÍVEIS (NOVO)
+local espFusivesBtn = Instance.new("TextButton")
+espFusivesBtn.Size = UDim2.new(1, -20, 0, 60)
+espFusivesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 255)
+espFusivesBtn.Text = "Esp Fusiveis OFF"
+espFusivesBtn.TextColor3 = Color3.new(1, 1, 1)
+espFusivesBtn.TextScaled = true
+espFusivesBtn.Font = Enum.Font.GothamBold
+espFusivesBtn.LayoutOrder = 2
+espFusivesBtn.Parent = scrollFrame
+
+local espFusivesCorner = Instance.new("UICorner")
+espFusivesCorner.CornerRadius = UDim.new(0, 12)
+espFusivesCorner.Parent = espFusivesBtn
+
+local espFusivesEnabled = false
+espFusivesBtn.MouseButton1Click:Connect(function()
+    espFusivesEnabled = not espFusivesEnabled
+    
+    if espFusivesEnabled then
+        -- Limpa highlights anteriores
+        clearFuseHighlights()
+        
+        -- Procura e destaca TODOS os Tools chamados "Fuse"
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Tool") and string.lower(obj.Name) == "fuse" then
+                addFuseHighlight(obj)
+            end
+        end
+        
+        espFusivesBtn.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+        espFusivesBtn.Text = "Esp Fusiveis ON"
+        print("🔍 ESP FUSÍVEIS ATIVADO!")
+    else
+        clearFuseHighlights()
+        espFusivesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 255)
+        espFusivesBtn.Text = "Esp Fusiveis OFF"
+        print("🔍 ESP FUSÍVEIS DESATIVADO!")
+    end
+end)
+
 -- BOTÕES TP
 local btnPositions = {
     {name = "Sala De Segurança", pos = positions.Salao},
@@ -380,7 +450,7 @@ for i, data in ipairs(btnPositions) do
     btn.TextColor3 = Color3.new(1, 1, 1)
     btn.TextScaled = true
     btn.Font = Enum.Font.GothamBold
-    btn.LayoutOrder = i + 1
+    btn.LayoutOrder = i + 3  -- Aumentado para dar espaço ao botão ESP
     btn.ZIndex = 1
     btn.Parent = scrollFrame
     
